@@ -25,6 +25,18 @@ class BoardServer extends EventEmitter {
     // NVS 里存的那个。
     this.publicWsUrl = cfg.publicWsUrl || '';
     this.publicHttpUrl = cfg.publicHttpUrl || '';
+    // 绑哪个网卡。默认只听本机(前面套 nginx 的标准做法,最安全)。
+    // **家里的电脑/树莓派当服务器时要填 `0.0.0.0`** —— 板子和它在同一个局域网,
+    // 直连 192.168.x.x:8791 就行,不用公网、不用域名、不用 nginx。
+    // ⚠️填 0.0.0.0 等于把控制台和 OTA 端点暴露给整个局域网(有 token 挡着,但别在公共 WiFi 下这么干)。
+    this.bindHost = cfg.bindHost || '127.0.0.1';
+    this.ota = cfg.ota || null;   // {version,file}:配了才推固件(见 _handleHttp)
+    this.client = null;       // 单板;多卫星时改 Map(架构 九)
+    this.sessionId = '';
+    this._mcpId = 0;          // MCP 请求自增 id
+    this._mcpWait = new Map(); // id → 等着回应的 resolver(见 /admin/mcp)
+    this._lagN = 0; this._lagSum = 0; this._lagMax = 0; this._lagHits = 0; // 下行积压统计(见 sendAudio)
+
     this.ota = cfg.ota || null;   // {version,file}:配了才推固件(见 _handleHttp)
     this.client = null;       // 单板;多卫星时改 Map(架构 九)
     this.sessionId = '';
@@ -321,7 +333,7 @@ class BoardServer extends EventEmitter {
         cb(false, 401, 'Unauthorized');
       },
     });
-    this.httpServer.listen(this.port, '127.0.0.1');
+    this.httpServer.listen(this.port, this.bindHost);
     this.wss.on('connection', (ws, req) => {
       ws._dev = req.headers['device-id'] || '?';
       ws.isAlive = true;
@@ -416,7 +428,7 @@ class BoardServer extends EventEmitter {
       this.client._pingAt = Date.now();
       try { this.client.ping(); } catch (e) {}
     }, 20000);
-    this.emit('log', `小智协议端就绪 127.0.0.1:${this.port}(WS+OTA)`);
+    this.emit('log', `小智协议端就绪 ${this.bindHost}:${this.port}(WS+OTA)`);
     // 这两个漏配不会立刻报错,但板子会连不回来/升不了级 —— 说在前面
     if (!this.publicWsUrl) this.emit('log', '⚠️没配 publicWsUrl:OTA 不会下发服务器地址,板子只能沿用它自己存的');
     if (!this.publicHttpUrl) this.emit('log', '⚠️没配 publicHttpUrl:固件推送整个不可用');

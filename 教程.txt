@@ -29,9 +29,12 @@ github.com/airem2024/telos(后端+手机App,App 在 Releases)
 有得选:
 · 一台 24 小时开着、能正常访问 Anthropic 的机器,三层服务都跑它上面。
   海外 VPS(5~10美元/月,2G 内存起,网络问题一次解决)
-  或家里旧电脑/树莓派(省月费,要魔法自己想办法,还得真的不关机)
-· 公网地址,板子要能连回来。
-  VPS 直接用 IP(不用花钱买域名,我自己就是 ws://IP/ 直连跑的)
+  或家里旧电脑/树莓派(省月费,要魔法自己想办法,还得真的不关机。
+  Windows 要装 WSL2,板子走局域网反而更省事,见第 3 层)
+· 板子怎么连回来。
+  跑在家里的电脑上:板子和它同一个 WiFi,填局域网 IP 就行,
+  不用公网、不用域名、不用 nginx——这条最省事
+  跑在 VPS 上:直接用 IP(不用花钱买域名,我自己就是 ws://IP/ 直连跑的)
   或 DuckDNS 白嫖一个域名(能签 HTTPS 证书,但两个月要续一次)
   或买个域名(几十块一年,配 Cloudflare 托管)
 
@@ -49,18 +52,43 @@ github.com/airem2024/telos(后端+手机App,App 在 Releases)
 
 ── 第 1 层:机器和 Claude Code ──
 
-买台 VPS(区域随意,能访问 Anthropic 就行),ssh 上去。
+先选一条路,后面三层的写法略有不同:
 
-装 Node(用系统源,别用 nvm,后面 systemd 服务会被 nvm 的路径坑):
+  A. 海外 VPS —— 省心。24 小时开着,网络问题一次解决
+  B. 家里的电脑/树莓派 —— 省月费,但要魔法、要真的不关机
+
+【A. VPS】
+
+买台 VPS(2G 内存起,能访问 Anthropic 就行),ssh 上去。
+
+装 Node(用系统源,别用 nvm——后面 systemd 服务会被 nvm 的路径坑):
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt install -y nodejs
 
 装 claude code:
   npm install -g @anthropic-ai/claude-code
 
-登录:跑一下 claude,选订阅登录,它给你一个网址——复制到你自己
-电脑的浏览器里打开,授权后把页面给的码粘回终端。
-接 api 的话不用登录,设环境变量 ANTHROPIC_API_KEY 就行。
+【B. 家里的电脑】
+
+Windows:装 WSL2(管理员开 PowerShell 跑 wsl --install,重启),
+然后在 WSL 的 Ubuntu 里照 A 的命令走一遍。
+别在 Windows 原生装——后面 Telos 的部署脚本是 bash 的,跑不了。
+
+Mac / Linux 桌面:直接装 Node 和 claude code(Mac 用 brew install node)。
+后面部署脚本能跑,只是装不了系统服务,得手动跑,见第 2 层。
+
+树莓派:就是 Linux,照 A 走。
+
+家里部署的两个附加事项:
+· 魔法要在整机层面生效,不能只给浏览器挂——claude 是命令行程序,
+  它得能直连 Anthropic
+· 电脑关机 = 板子下线,这条没有绕过的办法
+
+【两条路都一样:登录】
+
+跑一下 claude,选订阅登录,它给你一个网址——复制到浏览器打开,
+授权后把页面给的码粘回终端。
+接 api 就不用登录,设环境变量 ANTHROPIC_API_KEY 即可。
 
 验证点:终端里 claude 能回你话。
 
@@ -70,7 +98,13 @@ github.com/airem2024/telos(后端+手机App,App 在 Releases)
   cd telos && bash server/deploy.sh
 
 脚本会装依赖、生成 token(记下来,后面都靠它)、装 systemd 服务。
-没有 systemd 的环境(容器/WSL)加 --no-svc,然后自己 node server.js。
+
+家里的电脑(WSL / Mac)没有 systemd,加个参数:
+  bash server/deploy.sh --no-svc
+它只装依赖和生成 token,然后自己跑:
+  cd server && node server.js
+这个终端窗口得一直开着。想关窗口也能跑的话,WSL 用 nohup,
+Mac 用 pm2 或 launchd——不折腾就先开着窗口,能用就行。
 
 三个坑:
 · 一定先把上一层的 claude 登录弄好再跑 deploy——脚本发现没装
@@ -92,14 +126,15 @@ github.com/airem2024/telos(后端+手机App,App 在 Releases)
   cd voice-terminal && npm install
   cp config.example.json config.json
 
-config.json 每个键上面都有说明,必填的就四样:
-· publicWsUrl / publicHttpUrl:板子从公网连回来的地址(见下)
+config.json 每个键上面都有说明,必填的这几样:
 · dashscopeEnvFile:指向一个文件,里面一行 DASHSCOPE_API_KEY=sk-xxx
   (key 在百炼控制台创建)
 · deviceAllow:板子的 MAC 地址(不知道就先留空,板子连一次看日志)
+· bindHost + publicWsUrl / publicHttpUrl:看你走哪条路,见下
 
-公网地址这里有个实测的坑:板子装不了任何代理,而且部分家庭网络
-到高位端口时通时不通——最稳的是 nginx 在 80 端口反代:
+【A. VPS】板子从公网连回来
+
+bindHost 保持默认 127.0.0.1,前面用 nginx 反代 80 端口:
 
   server {
     listen 80;
@@ -111,13 +146,34 @@ config.json 每个键上面都有说明,必填的就四样:
     }
   }
 
-然后 publicWsUrl 填 ws://你的IP/,publicHttpUrl 填 http://你的IP/。
-明文的取舍:省掉板子的加密开销,代价是语音明文过公网,自己权衡。
+publicWsUrl 填 ws://你的IP/,publicHttpUrl 填 http://你的IP/。
 
-跑起来:node index.js(稳定了再包个 systemd 服务,几行的事)。
+为什么非要 80 端口:板子装不了任何代理,而且实测部分家庭网络到
+高位端口时通时不通,标准端口最稳。明文的取舍是省掉板子的加密
+开销,代价是语音明文过公网,自己权衡。
 
-验证点:浏览器开 http://你的IP/admin?t=你的boardToken,
-能看到控制台页面。boardToken 在 config.json 里,首次启动自动生成。
+【B. 家里的电脑】板子和它同一个 WiFi,直接局域网连
+
+这条路简单得多——不用公网、不用域名、不用 nginx:
+· bindHost 填 "0.0.0.0"
+· publicWsUrl 填 ws://电脑的局域网IP:8791/
+· publicHttpUrl 填 http://电脑的局域网IP:8791/
+
+局域网 IP 怎么看:Windows 在 WSL 里跑 ipconfig.exe 找 IPv4,
+Mac 系统设置里看,Linux 跑 ip a。一般是 192.168.x.x。
+最好在路由器里给电脑绑个固定 IP,不然重启后 IP 变了板子就找不着。
+⚠️bindHost 填 0.0.0.0 等于把控制台暴露给整个局域网(有 token 挡着),
+别在公共 WiFi 下这么干。
+
+【两条路都一样】
+
+跑起来:node index.js
+(VPS 稳定后可以包个 systemd 服务;家里电脑同上,窗口开着就行)
+
+验证点:浏览器开控制台,能看到页面。
+  VPS:    http://你的IP/admin?t=你的boardToken
+  家里:   http://局域网IP:8791/admin?t=你的boardToken
+boardToken 在 config.json 里,首次启动自动生成。
 
 ── 第 4 层:板子 ──
 
@@ -197,6 +253,9 @@ VPS           $5~10/月      家里机器 = 0
 
 · 先登录 claude 再跑 deploy.sh,顺序反了服务起得来但说不了话
 · node 用系统源装,nvm 装的以后服务会起不来
+· Windows 用 WSL2,别在原生装(部署脚本是 bash 的)
+· 家里部署:bindHost 要填 0.0.0.0,不然板子在局域网里连不上;
+  再去路由器给电脑绑个固定 IP
 · 板子那条线走 80 端口直连,别走 Cloudflare(家庭网络到 CF 时好时坏)
 · seturl 会清板子 WiFi,重配一次,不是坏了
 · 板子说话没记忆 = 接了空白会话,去控制台选附着对话

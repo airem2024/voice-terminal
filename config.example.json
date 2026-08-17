@@ -1,6 +1,9 @@
 {
   "_读我": "复制成 config.json 再改。真的 config.json 是 gitignored 的(里面有 boardToken)。带 _ 前缀的键都是说明,程序不读。首次启动没有 config.json 会自动生成一份并随机出 boardToken。",
 
+  "_0_跑在家里的电脑上?": "把 bindHost 填 \"0.0.0.0\",板子和电脑在同一个 WiFi 里就能直连,publicWsUrl 填 ws://电脑的局域网IP:8791/ 即可 —— 不用公网地址、不用域名、不用 nginx。⚠️这等于把控制台暴露给整个局域网(有 token 挡着),别在公共 WiFi 下这么干。跑在 VPS 上就别动它,保持只听本机、前面套 nginx。",
+  "bindHost": "127.0.0.1",
+
   "_1_板子怎么连进来": "boardToken 是板子的鉴权口令,刷固件时要填进板子;deviceAllow 是白名单,填板子的 MAC(留空数组=谁都能连,不建议)。publicWsUrl/publicHttpUrl 是板子从外网连回来的地址 —— 这两个必须填对,填错板子连不回来,且只能靠串口救。",
   "boardPort": 8791,
   "boardToken": "",
