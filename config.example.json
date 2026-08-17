@@ -1,0 +1,42 @@
+{
+  "_读我": "复制成 config.json 再改。真的 config.json 是 gitignored 的(里面有 boardToken)。带 _ 前缀的键都是说明,程序不读。首次启动没有 config.json 会自动生成一份并随机出 boardToken。",
+
+  "_1_板子怎么连进来": "boardToken 是板子的鉴权口令,刷固件时要填进板子;deviceAllow 是白名单,填板子的 MAC(留空数组=谁都能连,不建议)。publicWsUrl/publicHttpUrl 是板子从外网连回来的地址 —— 这两个必须填对,填错板子连不回来,且只能靠串口救。",
+  "boardPort": 8791,
+  "boardToken": "",
+  "deviceAllow": [],
+  "publicWsUrl": "ws://你的公网地址/",
+  "publicHttpUrl": "http://你的公网地址/",
+
+  "_2_语音服务": "STT 和 TTS 都走阿里云 DashScope。key **别写在这个文件里** —— 指一个只有你能读的文件,里面一行 DASHSCOPE_API_KEY=sk-xxx;或者干脆设环境变量 DASHSCOPE_API_KEY。voice 是音色 id:复刻音色跟账号绑,别人的用不了,留空则用官方公开音色 Cherry。",
+  "dashscopeEnvFile": "/etc/dashscope.env",
+  "voice": "",
+
+  "_3_她是谁": "persona 是她的名字,控制台标题和几处提示语用它。nameFix 是 ASR 正名表:{\"正确写法\": [\"听错1\",\"听错2\"]} —— 语音识别常把名字听成同音字,这里把它改回来(0814 定的规矩:纠正、绝不删掉称呼)。homophone 是唤醒词剥离用的同音表:{\"字\":\"这些字都算同音\"},只在名字里有\"标准读音和实际念法不同\"的字时才需要配。",
+  "persona": "",
+  "nameFix": {},
+  "homophone": {},
+
+  "_4_唤醒词": "唤醒语在控制台里改(那儿能看见转出来的拼音、多音字可以手改),不用动这个文件。dir 指向解压好的 sherpa-onnx KWS 模型目录,keywords.txt 就写在这个目录下。wakeOn=true 才加载模型(约 90MB 内存),而且要板子固件肯常态上传音频才有意义。",
+  "wakeOn": false,
+  "wakeWord": {
+    "dir": "/opt/kws-model",
+    "model": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01",
+    "ckpt": "epoch-12-avg-2-chunk-16-left-64",
+    "keywords": "keywords.txt",
+    "boost": 4.0,
+    "threshold": 0.05
+  },
+
+  "_5_模型": "不填 model 就跟着这个对话在 App 里选的模型走(推荐)。填了就钉死不动。**任何时候都别带 [1m] 后缀** —— 那是要另买 credits 的独立 SKU,而 base 模型的实测窗口本来就是 1M。",
+  "model": "",
+  "voiceMode": "always",
+
+  "_6_时区与固件": "tzOffsetMin 是下发给板子的时区偏移(分钟),480=北京。firmwareDir 是 ota-switch.sh 找固件的目录。",
+  "tzOffsetMin": 480,
+  "firmwareDir": "./board/firmware",
+
+  "_7_其余参数": "拾音门槛/打断/字幕节奏那些都在控制台里滑,改完自动落回这个文件,不用手写。熔断是防跑飞的:1 小时滑动窗内超过任一阈值就不再进对话(电视人声反复误触发过)。",
+  "maxCostPerHour": 12,
+  "maxTurnsPerHour": 80
+}

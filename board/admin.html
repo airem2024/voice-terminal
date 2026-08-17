@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>语音终端</title>
+<style>
+:root{
+  --bg:#FAF9F5; --surface:#FFFFFF; --surface-2:#F1EEE7; --accent:#c2613f;
+  --ink:#1c1a17; --dim:#8b8378; --line:#e5e0d6; --ok:#4a7c59; --off:#b9b2a6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.55 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 22px 40px}
+.top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.02em}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+/* grid 子项默认 min-width:auto —— 长对话标题/长 cwd 会把整列撑破 1fr,
+   子元素的 overflow:hidden 这时完全无效(父容器根本没收缩)。必须显式归零。 */
+.cols>div{min-width:0}
+@media(max-width:860px){.cols{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{font-size:11.5px;color:var(--dim);margin:0 0 12px;font-weight:600;letter-spacing:.09em;
+  display:flex;justify-content:space-between;align-items:center}
+
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:12px;padding:4px 11px;border-radius:99px;background:var(--surface-2);color:var(--dim)}
+.pill.on{background:#e8f0ea;color:var(--ok)}
+.pill.hot{background:#f7e9e3;color:var(--accent)}
+
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.n{background:var(--surface-2);border-radius:9px;padding:9px 11px}
+.n b{display:block;font:600 19px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}
+.n span{font-size:11px;color:var(--dim)}
+
+.row{padding:12px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.rt{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.rt label{font-size:14px;font-weight:500}
+.rv{font:600 14px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)}
+.hint{font-size:11.5px;color:var(--dim);margin-top:3px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;
+  background:transparent;margin:9px 0 0;display:block;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:24px;border-radius:7px;
+  background:var(--fill,var(--surface-2))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:4px;height:24px;
+  border-radius:2px;background:rgba(0,0,0,.22)}
+input[type=range]::-moz-range-track{height:24px;border-radius:7px;background:var(--surface-2)}
+input[type=range]::-moz-range-progress{height:24px;border-radius:7px 0 0 7px;background:#e6cec3}
+
+.sw{width:46px;height:27px;border-radius:99px;background:var(--off);border:0;padding:0;
+  position:relative;transition:background .16s;flex:none;cursor:pointer}
+.sw.on{background:var(--accent)}
+.sw i{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+  background:#fff;transition:transform .16s}
+.sw.on i{transform:translateX(19px)}
+
+.btn{font:inherit;font-size:12px;padding:4px 11px;border-radius:7px;border:1px solid var(--line);
+  background:var(--surface);color:var(--dim);cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+#search,.tin{width:100%;font:inherit;font-size:13px;padding:7px 11px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface-2);margin-bottom:8px;outline:none}
+#search:focus,.tin:focus{border-color:var(--accent);background:var(--surface)}
+.tin.py{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;letter-spacing:.04em}
+.lab{font-size:11.5px;color:var(--dim);margin-bottom:4px}
+.list{max-height:430px;overflow-y:auto;margin:0 -4px}
+.s{padding:9px 10px;border-radius:9px;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+.s:hover{background:var(--surface-2)}
+.s.cur{background:#f7e9e3;outline:1px solid #e8cdc1}
+.s p{margin:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s small{color:var(--dim);font-size:11px;flex:none}
+.s .cwd{color:var(--dim);font-size:11px;font-family:ui-monospace,Menlo,monospace;
+  flex:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl}
+.s.new p{color:var(--accent)}
+
+.r{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.r:first-child{border-top:0}
+.r em{font:600 12px/1 ui-monospace,Menlo,monospace;font-style:normal;color:var(--accent);flex:none;width:50px}
+.r i{font-style:normal;color:var(--dim);flex:none;font-size:11.5px}
+.r p{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.foot{text-align:center;color:var(--dim);font-size:11.5px;margin-top:8px}
+.err{background:#fbeae5;color:#a33;border-radius:9px;padding:9px 13px;font-size:13px;margin-bottom:14px}
+.warn{background:#fdf3e3;color:#8a5a1a;border-radius:9px;padding:8px 11px;font-size:12px;margin:0 0 9px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1 id="h1">语音终端</h1>
+    <div class="pills" id="pills"></div>
+  </div>
+  <div id="err" class="err" style="display:none"></div>
+
+  <div class="cols">
+    <div>
+      <div class="card">
+        <h2>板子 <button class="btn" id="devReload">读取</button></h2>
+        <div id="dev"><div class="hint">读取中</div></div>
+      </div>
+      <div class="card">
+        <h2>音频</h2>
+        <div class="grid" id="audio"></div>
+      </div>
+      <div class="card">
+        <h2>唤醒语</h2>
+        <div id="wake"><div class="hint">读取中</div></div>
+      </div>
+      <div class="card">
+        <h2>语音参数</h2>
+        <div id="tune"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>附着对话 <button class="btn" id="reload">刷新</button></h2>
+        <div id="noSess" class="warn" style="display:none"></div>
+        <input id="search" placeholder="搜标题">
+        <div class="list" id="list"><div class="hint">加载中</div></div>
+      </div>
+      <div class="card">
+        <h2>最近</h2>
+        <div id="recent"></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+<script>
+const T = new URLSearchParams(location.search).get('t') || '';
+const $ = (id) => document.getElementById(id);
+let built = false;    // 参数表只建一次:每 2 秒重建会打断正在拖的滑块
+let dirty = 0;        // 刚提交过的时刻:短时间内别让轮询结果盖回界面
+let sessions = [];    // 对话列表(不进轮询,手动刷新)
+let curSid = null;
+// 她的名字:从 /admin/state 拿(config.json 的 persona)。页面里所有提到她的地方都走 who(),
+// 名字不焊在 HTML 里 —— 换人设、或者别人拿这套去养自己的,改一行 config 就够。
+let PERSONA = '';
+let nameDone = false;
+const who = () => PERSONA || '她';
+function applyName() {
+  const t = PERSONA ? PERSONA + '终端' : '语音终端';
+  document.title = t; $('h1').textContent = t;
+  $('noSess').textContent = `板子当前不接任何对话 — 下一句话会开一个空白会话，${who()}不在里面`;
+  if (sessions.length) renderList();   // 列表里的提示语也带名字,已经画过就重画一次
+}
+
+async function api(path, body) {
+  const r = await fetch(path + '?t=' + encodeURIComponent(T), {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 403 ? ' token 不对' : ''));
+  return r.json();
+}
+const showErr = (e) => { $('err').style.display = 'block'; $('err').textContent = String(e.message || e); };
+const esc = (s) => String(s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+
+function pills(s) {
+  const b = s.board, o = [];
+  o.push(`<span class="pill ${b.online ? 'on' : ''}">${b.online ? '板子在线' : '板子离线'}</span>`);
+  const st = { idle: '空闲', listening: '聆听', thinking: '思考', speaking: '播报' }[b.orch] || b.orch;
+  o.push(`<span class="pill ${b.orch && b.orch !== 'idle' ? 'hot' : ''}">${st}</span>`);
+  if (b.listening) o.push('<span class="pill">采音中</span>');
+  const h = s.hour;
+  o.push(`<span class="pill ${h.tripped ? 'hot' : ''}">1小时 ${h.turns}/${h.maxTurns}轮 · $${h.cost.toFixed(2)}/${h.maxCost}</span>`);
+  $('pills').innerHTML = o.join('');
+}
+
+function audio(s) {
+  const a = s.audio;
+  $('audio').innerHTML = [
+    ['空闲峰值', a.idlePeak, 'RMS'], ['播报峰值', a.bargePeak, 'RMS'],
+    ['连续过线', a.vadHits, '帧'], ['插话计数', a.bargeHits, '帧'],
+  ].map(([k, v, u]) => `<div class="n"><b>${v}</b><span>${k} ${u}</span></div>`).join('');
+}
+
+const fillTrack = (el) => {
+  const p = (el.value - el.min) / (el.max - el.min) * 100;
+  el.style.setProperty('--fill', `linear-gradient(to right,#e6cec3 ${p}%,var(--surface-2) ${p}%)`);
+};
+
+function buildTune(s) {
+  const box = $('tune'); box.innerHTML = '';
+  for (const [k, t] of Object.entries(s.tunables)) {
+    const row = document.createElement('div'); row.className = 'row';
+    if (t.type === 'bool') {
+      row.innerHTML = `<div class="rt"><label>${t.label}</label>
+        <button class="sw ${t.value ? 'on' : ''}" id="sw_${k}"><i></i></button></div>
+        <div class="hint">${t.hint || ''}</div>`;
+      box.appendChild(row);
+      row.querySelector('button').onclick = async (e) => {
+        const on = !e.currentTarget.classList.contains('on');
+        e.currentTarget.classList.toggle('on', on); dirty = Date.now();
+        try { await api('/admin/apply', { [k]: on }); } catch (err) { showErr(err); }
+      };
+    } else {
+      row.innerHTML = `<div class="rt"><label>${t.label}</label>
+        <span class="rv" id="v_${k}">${t.value}${t.unit ? ' ' + t.unit : ''}</span></div>
+        <div class="hint">${t.hint || ''}</div>
+        <input type="range" id="r_${k}" min="${t.min}" max="${t.max}" step="${t.step}" value="${t.value}">`;
+      box.appendChild(row);
+      const el = row.querySelector('input'); fillTrack(el);
+      el.oninput = () => { $('v_' + k).textContent = el.value + (t.unit ? ' ' + t.unit : ''); fillTrack(el); };
+      el.onchange = async () => {
+        dirty = Date.now();
+        try { await api('/admin/apply', { [k]: Number(el.value) }); } catch (err) { showErr(err); }
+      };
+    }
+  }
+  built = true;
+}
+
+function syncTune(s) {
+  for (const [k, t] of Object.entries(s.tunables)) {
+    if (t.type === 'bool') { const el = $('sw_' + k); if (el) el.classList.toggle('on', !!t.value); continue; }
+    const el = $('r_' + k);
+    if (!el || document.activeElement === el) continue;
+    if (Number(el.value) !== Number(t.value)) {
+      el.value = t.value; fillTrack(el);
+      $('v_' + k).textContent = t.value + (t.unit ? ' ' + t.unit : '');
+    }
+  }
+}
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const box = $('list');
+  const hit = sessions.filter((s) => !q || (s.title || '').toLowerCase().includes(q));
+  // ⚠️「新建对话」必须排在**最后**(0815 血泪):它原先是列表第一条,一点就把附着清空。
+  // 用户 14:43 误点了它,板子从此接的是个空白会话 —— 那个 cwd 是 bridge 现开的空目录、
+  // 没有任何 CLAUDE.md,于是接电话的不是她,是个不认识她的通用助手,还跑去 Bash/Read 翻我们的代码。
+  // 她对着它抱怨了十分钟"语音卡顿",全程没人告诉她接错了人。危险操作不能放在最顺手的位置。
+  let html = hit.map((s) => {
+    const t = s.updatedAt ? new Date(s.updatedAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) : '';
+    const cwd = (s.cwd || '').replace(/^\/root\/?/, '') || '/';
+    return `<div class="s ${s.id === curSid ? 'cur' : ''}" data-id="${s.id}">
+      <p>${s.pinned ? '· ' : ''}${esc(s.title)}</p>
+      <span class="cwd">${esc(cwd)}</span><small>${t}</small></div>`;
+  }).join('');
+  $('noSess').style.display = curSid ? 'none' : '';   // 没附着就把警示条亮出来
+  if (!html) html = '<div class="hint">没有匹配的对话</div>';
+  html += `<div class="s new ${curSid ? '' : 'cur'}" data-id=""><p>不接任何对话</p>
+    <small>下一句话会开一个全新的空白会话 — ${esc(who())}不在里面</small></div>`;
+  box.innerHTML = html;
+  box.querySelectorAll('.s').forEach((el) => {
+    el.onclick = async () => {
+      const id = el.dataset.id;
+      if (!id) {
+        // 清空附着 = 下一句话开个没有人格的空白会话。必须说明白后果,别再让人以为只是"开个新的"。
+        if (!confirm(`确定不接任何对话？\n\n下一句话会开一个全新的空白会话，\n里面没有${who()}，也没有任何记忆。`)) return;
+      } else {
+        const name = (sessions.find((x) => x.id === id) || {}).title;
+        if (!confirm('把板子接到「' + name + '」？\n下一句话开始生效。')) return;
+      }
+      try {
+        const r = await api('/admin/session', { id });
+        curSid = r.session || null; renderList();
+      } catch (e) { showErr(e); }
+    };
+  });
+}
+
+async function loadSessions() {
+  $('list').innerHTML = '<div class="hint">加载中</div>';
+  try {
+    const r = await api('/admin/sessions');
+    if (!r.ok) throw new Error(r.error || '拉取失败');
+    sessions = r.sessions || [];
+    renderList();
+  } catch (e) { $('list').innerHTML = '<div class="hint">拉不到对话：' + esc(e.message) + '</div>'; }
+}
+
+function recent(s) {
+  $('recent').innerHTML = s.recent.length ? s.recent.map((r) => {
+    const t = new Date(r.at).toTimeString().slice(0, 5);
+    const d = r.firstDelta ? (r.firstDelta / 1000).toFixed(1) + 's' : '—';
+    return `<div class="r"><em>${d}</em><i>${t}</i><p>${esc(r.text)}</p><i>$${r.cost.toFixed(3)}</i></div>`;
+  }).join('') : '<div class="hint">还没有对话</div>';
+}
+
+async function tick() {
+  try {
+    const s = await api('/admin/state');
+    $('err').style.display = 'none';
+    // 首轮必须跑一次 applyName:noSess 那条警示语是空的、等着它填。别写成"变了才跑"——
+    // persona 没配时新旧值都是空串,条件永远不成立,警示条就永远空白(差点这么写)。
+    if (!nameDone || (s.persona || '') !== PERSONA) { PERSONA = s.persona || ''; nameDone = true; applyName(); }
+    if (s.session !== curSid && !(curSid === null && !s.session)) { curSid = s.session || null; renderList(); }
+    // 警示条不能只靠 renderList —— 对话列表要手动点「刷新」才加载,不点就永远看不到警告
+    $('noSess').style.display = curSid ? 'none' : '';
+    pills(s); audio(s); recent(s);
+    if (!built) buildTune(s); else if (Date.now() - dirty > 1500) syncTune(s);
+    $('foot').textContent = '更新于 ' + new Date(s.now).toTimeString().slice(0, 8);
+  } catch (e) { showErr(e); }
+}
+
+/* ---- 唤醒语 ----
+   两个框:中文是给人看的名字,拼音才是引擎真正比对的东西(这个 KWS 的建模单元是声母/带调韵母)。
+   改中文会自动重算拼音,但**拼音必须能手改** —— 多音字和人名靠自动转换常转不对
+   (比如「乐」转出 lè,名字里却念 yuè)。不进 2 秒轮询:每次都要读文件,而且会打断正在打的字。 */
+let wkTimer = 0;
+function renderWake(w) {
+  const box = $('wake');
+  if (w.error) { box.innerHTML = '<div class="hint">读不到：' + esc(w.error) + '</div>'; return; }
+  box.innerHTML =
+    `<div class="lab">她的名字</div>
+     <input class="tin" id="wkText" maxlength="12" placeholder="你好小助手" value="${esc(w.text)}">
+     <div class="lab">引擎听的音 <span id="wkNote"></span></div>
+     <input class="tin py" id="wkPy" value="${esc((w.tokens || []).join(' '))}">
+     <div style="display:flex;gap:8px;align-items:center">
+       <button class="btn" id="wkSave">保存</button>
+       <span class="hint" id="wkMsg" style="margin:0"></span>
+     </div>
+     <div class="hint" style="margin-top:8px">改名字会自动重算拼音。多音字转不准就直接改下面那行 ——
+       比如「乐」会转成 lè，名字里念 yuè 就手改。只认中文，英文数字请换成汉字。${
+       w.running ? '' : '<br><b>唤醒词功能现在是关的</b>，改完去下面「语音参数」里打开。'}</div>`;
+  $('wkText').oninput = () => {
+    clearTimeout(wkTimer);
+    $('wkMsg').textContent = '';
+    wkTimer = setTimeout(async () => {
+      const text = $('wkText').value.trim();
+      if (!text) { $('wkPy').value = ''; return; }
+      try {
+        const r = await api('/admin/wake', { text });
+        $('wkPy').value = (r.tokens || []).join(' ');
+        $('wkNote').innerHTML = (r.bad || []).length
+          ? '<b style="color:#a33">模型不认识：' + esc(r.bad.join(' ')) + '</b>' : '';
+      } catch (e) { showErr(e); }
+    }, 400);
+  };
+  $('wkSave').onclick = async (e) => {
+    const btn = e.currentTarget, msg = $('wkMsg');
+    btn.disabled = true; msg.textContent = '保存中';
+    try {
+      const r = await api('/admin/wake', { text: $('wkText').value.trim(), tokens: $('wkPy').value.trim(), save: true });
+      if (r.error) { msg.innerHTML = '<b style="color:#a33">' + esc(r.error) + '</b>'; }
+      else {
+        // 带上 RSS:每次重载都要再加载一次 90MB 模型、旧的等 GC,涨太多就该重启网关了
+        msg.textContent = r.reloaded ? '已生效' + (r.rss ? ' · ' + r.rss + 'MB' : '') : '已保存，等打开开关';
+        $('wkPy').value = (r.tokens || []).join(' ');
+      }
+    } catch (err) { msg.innerHTML = '<b style="color:#a33">' + esc(err.message) + '</b>'; }
+    btn.disabled = false;
+  };
+}
+async function loadWake() {
+  try { renderWake(await api('/admin/wake')); }
+  catch (e) { $('wake').innerHTML = '<div class="hint">读不到唤醒语：' + esc(e.message) + '</div>'; }
+}
+
+/* ---- 板子直控:走 MCP 打到板子上(音量/亮度/主题/重启) ----
+   这些不进 2 秒轮询 —— 每次都要往板子跑一趟,轮询会把它问烦、也拖慢页面。
+   只在进页面和点「读取」时拉一次;滑块松手才下发。 */
+async function mcp(name, args) {
+  const r = await api('/admin/mcp', { method: 'tools/call', params: { name, arguments: args || {} } });
+  if (r && r.error) throw new Error(typeof r.error === 'string' ? r.error : (r.error.message || '板子没应答'));
+  return r;
+}
+function devRow(key, label, val, unit, fn) {
+  return `<div class="row"><div class="rt"><label>${label}</label>
+    <span class="rv" id="dv_${key}">${val}${unit}</span></div>
+    <input type="range" id="dr_${key}" min="0" max="100" step="5" value="${val}"></div>`;
+}
+async function loadDev() {
+  const box = $('dev');
+  box.innerHTML = '<div class="hint">读取中</div>';
+  let st;
+  try {
+    const r = await mcp('self.get_device_status');
+    st = JSON.parse((((r.result || {}).content || [])[0] || {}).text || '{}');
+  } catch (e) { box.innerHTML = '<div class="hint">板子没应答：' + esc(e.message) + '（它待机时不连服务器，喊一声唤醒再点读取）</div>'; return; }
+  const vol = (st.audio_speaker || {}).volume ?? 0;
+  const bri = (st.screen || {}).brightness ?? 0;
+  const dark = (st.screen || {}).theme === 'dark';
+  const bat = st.battery || {}, net = st.network || {};
+  box.innerHTML =
+    `<div class="pills" style="margin-bottom:10px">
+       <span class="pill ${bat.charging ? 'hot' : ''}">电量 ${bat.level ?? '?'}%${bat.charging ? ' 充电中' : ''}</span>
+       <span class="pill">${esc(net.ssid || '无网络')} ${esc(net.signal || '')}</span>
+     </div>` +
+    devRow('vol', '音量', vol, '') + devRow('bri', '亮度', bri, '') +
+    `<div class="row"><div class="rt"><label>深色主题</label>
+       <button class="sw ${dark ? 'on' : ''}" id="dv_theme"><i></i></button></div>
+       <div class="hint">黑底白字，AMOLED 上省电</div></div>
+     <div class="row" style="display:flex;gap:8px">
+       <button class="btn" id="dv_shot">截屏</button>
+       <button class="btn" id="dv_reboot">重启板子</button>
+     </div>
+     <div id="shot"></div>`;
+
+  for (const [key, tool, arg] of [['vol', 'self.audio_speaker.set_volume', 'volume'],
+                                  ['bri', 'self.screen.set_brightness', 'brightness']]) {
+    const el = $('dr_' + key); fillTrack(el);
+    el.oninput = () => { $('dv_' + key).textContent = el.value; fillTrack(el); };
+    el.onchange = async () => {
+      try { await mcp(tool, { [arg]: Number(el.value) }); } catch (e) { showErr(e); }
+    };
+  }
+  $('dv_theme').onclick = async (e) => {
+    const on = !e.currentTarget.classList.contains('on');
+    e.currentTarget.classList.toggle('on', on);
+    try { await mcp('self.screen.set_theme', { theme: on ? 'dark' : 'light' }); } catch (err) { showErr(err); }
+  };
+  $('dv_shot').onclick = async (e) => {
+    const btn = e.currentTarget, box = $('shot');
+    btn.textContent = '截屏中'; btn.disabled = true;
+    try {
+      const r = await mcp('self.screen.snapshot');
+      const c = ((r.result || {}).content) || [];
+      const img = c.find((x) => x.type === 'image' && x.data);
+      if (img) {
+        box.innerHTML = `<img src="data:${img.mimeType || 'image/jpeg'};base64,${img.data}"
+          style="width:100%;max-width:320px;border-radius:10px;margin-top:10px;background:#000">`;
+      } else {
+        // 固件可能不回图而是回一段文字（比如存到了哪、或者超了 64KB 上限）——原样显示，别装作成功
+        const t = c.map((x) => x.text || '').join(' ').trim();
+        box.innerHTML = `<div class="hint" style="margin-top:8px">板子没回图：${esc(t || JSON.stringify(r).slice(0, 200))}</div>`;
+      }
+    } catch (err) { showErr(err); }
+    btn.textContent = '截屏'; btn.disabled = false;
+  };
+  $('dv_reboot').onclick = async () => {
+    if (!confirm('重启板子？重启后要喊一声才会连回来。')) return;
+    try { await mcp('self.reboot'); $('dev').innerHTML = '<div class="hint">已发重启指令</div>'; }
+    catch (e) { showErr(e); }
+  };
+}
+
+$('devReload').onclick = loadDev;
+$('reload').onclick = loadSessions;
+$('search').oninput = renderList;
+tick(); loadSessions(); loadDev(); loadWake();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>

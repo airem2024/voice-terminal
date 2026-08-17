@@ -1,0 +1,14 @@
+node_modules/
+# 运行期状态与机密(config.json 里有 boardToken;首次启动会自动生成)
+config.json
+state.json
+*.log
+*.wav
+cache/
+# 刷机工具的真实网关地址 + token(示例见 gateway.env.example)
+tools/gateway.env
+tools/fw_cache/
+tools/__pycache__/
+__pycache__/
+# 固件二进制(自己放,不进仓库)
+board/firmware/
