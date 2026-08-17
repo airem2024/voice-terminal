@@ -1,0 +1,205 @@
+让 Claude Code 住进一块小板子(完整教程)
+
+桌上这块小屏幕,说话的是我自己服务器上 Claude Code 里面的对话。
+对话记录、工具等都能够完整使用。
+
+整条链路:
+板子 → 服务器(语音网关 → Telos 后端 → Claude Code) → 板子
+声音的识别和合成走的是阿里云,大脑是 Claude 订阅。
+
+代码已开源:
+github.com/airem2024/voice-terminal(网关,固件在 Releases)
+github.com/airem2024/telos(后端+手机App,App 在 Releases)
+
+
+━━ 材料清单 ━━━━━━━━━━━━━━━━
+
+花钱和动手之前需要先对一遍这张表。
+
+必要:
+· Claude 订阅(Pro 20美元/月起),或者接 api——claude code 支持
+  ANTHROPIC_API_KEY,也能配中转接其他家的 api
+· 板子:微雪 ESP32-S3-Touch-AMOLED-2.16(选带电池版),我的到手价 185 元含运费。
+  2.16 寸方形 AMOLED 触摸屏 + 双麦 + 喇叭 + 电池。官方商城缺货就去淘宝看
+· 阿里云百炼(DashScope)API key:语音识别 + 语音合成,按量计费。
+  参考费用:我这两天调试加日常对话一共 2.4 元,话痨每月大概 30~50
+· 一台电脑 + USB 数据线:只用一次,把板子指向你的服务器
+· 半天时间
+
+有得选:
+· 一台 24 小时开着、能正常访问 Anthropic 的机器,三层服务都跑它上面。
+  海外 VPS(5~10美元/月,2G 内存起,网络问题一次解决)
+  或家里旧电脑/树莓派(省月费,要魔法自己想办法,还得真的不关机)
+· 公网地址,板子要能连回来。
+  VPS 直接用 IP(不用花钱买域名,我自己就是 ws://IP/ 直连跑的)
+  或 DuckDNS 白嫖一个域名(能签 HTTPS 证书,但两个月要续一次)
+  或买个域名(几十块一年,配 Cloudflare 托管)
+
+可选:
+· 音色复刻:百炼控制台上传声音样本可以复刻音色,不弄就用官方自带的
+· 手机 App:连同一个后端,手机和板子是同一份记忆。
+  telos 仓库 Releases 直接下,不装也不影响板子
+· 唤醒词:喊名字开始对话,不用按键。要刷配套固件,见第 5 步
+
+
+━━ 食用方式一:一步一步走 ━━━━━━━━
+
+一共四层,按顺序装。每层末尾有个验证点,过了再往下,
+出问题时你知道是哪一层的问题。
+
+── 第 1 层:机器和 Claude Code ──
+
+买台 VPS(区域随意,能访问 Anthropic 就行),ssh 上去。
+
+装 Node(用系统源,别用 nvm,后面 systemd 服务会被 nvm 的路径坑):
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt install -y nodejs
+
+装 claude code:
+  npm install -g @anthropic-ai/claude-code
+
+登录:跑一下 claude,选订阅登录,它给你一个网址——复制到你自己
+电脑的浏览器里打开,授权后把页面给的码粘回终端。
+接 api 的话不用登录,设环境变量 ANTHROPIC_API_KEY 就行。
+
+验证点:终端里 claude 能回你话。
+
+── 第 2 层:Telos 后端 ──
+
+  git clone https://github.com/airem2024/telos
+  cd telos && bash server/deploy.sh
+
+脚本会装依赖、生成 token(记下来,后面都靠它)、装 systemd 服务。
+没有 systemd 的环境(容器/WSL)加 --no-svc,然后自己 node server.js。
+
+三个坑:
+· 一定先把上一层的 claude 登录弄好再跑 deploy——脚本发现没装
+  claude 只是警告不拦,服务照样起,然后每句话都失败
+· 需要 sudo(装服务用)
+· 哪个用户跑 deploy,就得是哪个用户登录的 claude
+
+远程访问要个加密隧道(手机/浏览器用,板子不走这条):
+  cloudflared tunnel --url http://127.0.0.1:8790
+一条命令给你一个临时 https 地址。
+
+验证点:curl http://127.0.0.1:8790/version 返回 JSON 就是活了。
+更直观的验法:浏览器打开隧道地址,是一个完整的网页版,填 wss
+地址和 token,直接聊一句。通了这层就完事,不用装 App。
+
+── 第 3 层:语音网关 ──
+
+  git clone https://github.com/airem2024/voice-terminal
+  cd voice-terminal && npm install
+  cp config.example.json config.json
+
+config.json 每个键上面都有说明,必填的就四样:
+· publicWsUrl / publicHttpUrl:板子从公网连回来的地址(见下)
+· dashscopeEnvFile:指向一个文件,里面一行 DASHSCOPE_API_KEY=sk-xxx
+  (key 在百炼控制台创建)
+· deviceAllow:板子的 MAC 地址(不知道就先留空,板子连一次看日志)
+
+公网地址这里有个实测的坑:板子装不了任何代理,而且部分家庭网络
+到高位端口时通时不通——最稳的是 nginx 在 80 端口反代:
+
+  server {
+    listen 80;
+    location / {
+      proxy_pass http://127.0.0.1:8791;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    }
+  }
+
+然后 publicWsUrl 填 ws://你的IP/,publicHttpUrl 填 http://你的IP/。
+明文的取舍:省掉板子的加密开销,代价是语音明文过公网,自己权衡。
+
+跑起来:node index.js(稳定了再包个 systemd 服务,几行的事)。
+
+验证点:浏览器开 http://你的IP/admin?t=你的boardToken,
+能看到控制台页面。boardToken 在 config.json 里,首次启动自动生成。
+
+── 第 4 层:板子 ──
+
+板子保持出厂固件,USB 连电脑:
+
+  cd voice-terminal/tools
+  (把 gateway.env.example 复制成 gateway.env,填网关地址和 boardToken)
+  pip install esptool esp-idf-nvs-partition-gen requests pyserial
+  python flash.py seturl
+
+一条命令,把"去哪拿配置"写进板子,其余什么都不动。
+(Windows 不知道怎么在这个目录开命令行:文件管理器进到 tools
+文件夹,地址栏输入 cmd 回车。)
+
+烧完板子重启,WiFi 会被清掉,重新配一次——这是正常的不是坏了。
+配完它自己去你的网关拿配置,服务器地址和 token 都在里面。
+
+验证点:按一下侧键,说句话,它回你。到这全通了。
+
+最后一件事:打开控制台,在"附着对话"里选一个你聊过的对话。
+不选的话板子接的是全新空白会话——里面没有你的任何记录。
+
+── 让她成为她(可选) ──
+
+· 附着对话决定接电话的是谁。你在手机/网页上聊出来的对话,
+  控制台里选中,板子接的就是它,记忆是同一份
+· 音色:百炼控制台的声音复刻,录一段样本拿到音色 id,
+  填进 config.json 的 voice
+· 名字:控制台"唤醒语"卡片,输中文自动转拼音,多音字可以手改
+
+── 换表情(可选) ──
+
+屏幕上那 21 张脸在 assets 分区,和固件是分开的,能整套换成自己的。
+仓库 tools/assets.py 三条命令搞定:
+
+  python assets.py unpack assets.bin my_faces/   拆出全部表情
+  python assets.py pack   my_faces/ my.bin       换完图重新打包
+  python assets.py flash  my.bin                 烧回板子
+
+官方 assets.bin 从微雪 wiki 下载,或者直接从自己板子里读出来:
+  esptool read_flash 0x920000 0x300000 assets.bin
+
+图的要求:64×64 PNG,文件名不变。太大了 pack 会直接报错,
+不会让你烧出一个坏包。刷坏了最多没表情,不影响开机,
+刷回官方包就恢复。
+
+── 第 5 步(可选):唤醒词 ──
+
+喊一声名字就开始对话,不用按键。两个东西:
+· 服务器下个识别模型(36MB,命令在仓库 README 唤醒词那节)
+· 板子刷配套固件:voice-terminal 仓库 Releases 的 fw-v2.5.0,
+  esptool 刷法写在 Release 页。只写应用分区,WiFi 和地址不动。
+  只用按键对话就不用刷
+
+
+━━ 食用方式二 ━━━━━━━━━━━━━━
+
+1. 打开 claude code 输入"cc帮帮我!!!"
+2. 等着。
+
+(不是玩笑,把教程链接发给它,它真的会帮你装完。)
+
+
+━━ 账单 ━━━━━━━━━━━━━━━━━
+
+板子          185 元        一次性(含运费)
+Claude 订阅   $20/月起      本来就在付的话 = 0 增量
+VPS           $5~10/月      家里机器 = 0
+语音          话痨 30~50 元/月,轻用更少(实测两天 2.4 元)
+域名          0(IP 直连或 DuckDNS)
+
+延迟:说完话到听见回答约 3 秒。比直连 api 的音箱慢,
+这是完整 Claude Code 的代价,不是 bug。
+
+
+━━ 坑清单 ━━━━━━━━━━━━━━━━
+
+· 先登录 claude 再跑 deploy.sh,顺序反了服务起得来但说不了话
+· node 用系统源装,nvm 装的以后服务会起不来
+· 板子那条线走 80 端口直连,别走 Cloudflare(家庭网络到 CF 时好时坏)
+· seturl 会清板子 WiFi,重配一次,不是坏了
+· 板子说话没记忆 = 接了空白会话,去控制台选附着对话
+· 控制台页面改了看不到新版,强刷一下
+
+有问题评论区问。
