@@ -28,7 +28,8 @@ ESP32 板子 ──小智协议 ws──▶ 本网关 (Node) ──ws──▶ c
 ## 部署网关
 
 ```bash
-cd terminal && npm install
+git clone https://github.com/airem2024/voice-terminal
+cd voice-terminal && npm install
 cp config.example.json config.json     # 每个键上方都有 _说明,照着填
 node index.js                          # 首次运行会自动生成 boardToken
 ```
