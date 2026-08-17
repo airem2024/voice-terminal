@@ -79,8 +79,12 @@ wget https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-o
 tar xf sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
 ```
 
-先在控制台「唤醒语」卡片里设好她的名字（功能关着也能保存），再开 `wakeOn`。**但注意**：它要求板子在待机时也持续上传音频，出厂固件不带这个行为
-（出厂就是按键对话），所以这个功能需要固件配合，默认关着。只用按键对话完全不受影响。
+先在控制台「唤醒语」卡片里设好她的名字（功能关着也能保存），再开 `wakeOn`。
+
+**它要求板子在待机时也持续上传音频，出厂固件不带这个行为**（出厂就是按键对话）。
+配套的进阶固件在 [Releases](https://github.com/airem2024/voice-terminal/releases/tag/fw-v2.5.0)：
+常态上传、开机自连、姿态上报、防烧屏、朝向调整。只写 app 分区、不碰 WiFi 和服务器地址，
+刷法和注意事项（含"未经真机验证"的如实说明）都在 Release 页。只用按键对话就不用刷。
 
 ## 几个如实的预期
 
